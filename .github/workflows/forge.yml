@@ -1,0 +1,14 @@
+name: Lamoushi Forge Engine
+on:
+  repository_dispatch:
+    types: [build_library]
+
+jobs:
+  build_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Receive Instructions
+        run: |
+          echo "تم استلام طلب بناء من تطبيق لموشي!"
+          echo "المكتبة المطلوبة: ${{ github.event.client_payload.library }}"
+          echo "التوجيهات: ${{ github.event.client_payload.instructions }}"
