@@ -7,8 +7,26 @@ jobs:
   build_job:
     runs-on: ubuntu-latest
     steps:
-      - name: Receive Instructions
+      - name: Checkout Last Version
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # لجلب كافة التعديلات السابقة للقدرة على العودة
+
+      - name: Execution Step
         run: |
-          echo "تم استلام طلب بناء من تطبيق لموشي!"
-          echo "المكتبة المطلوبة: ${{ github.event.client_payload.library }}"
-          echo "التوجيهات: ${{ github.event.client_payload.instructions }}"
+          # تنفيذ الأوامر المرسلة من هاتفك
+          ${{ github.event.client_payload.instructions }}
+          
+      - name: Auto-Save Progress (Commit)
+        if: success() # لن يحفظ التعديل إلا إذا نجحت الأوامر
+        run: |
+          git config --global user.name "Lamoushi-Forge-Bot"
+          git config --global user.email "bot@lamoushi.forge"
+          
+          # حساب رقم التعديل تلقائياً
+          BUILD_NUMBER=$(git rev-list --count HEAD)
+          
+          # إضافة الملفات المعدلة وحفظها
+          git add .
+          git commit -m "Build $BUILD_NUMBER: التعديل التراكمي لـ FFmpeg" || echo "لا توجد تعديلات جديدة لحفظها"
+          git push
