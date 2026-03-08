@@ -10,23 +10,47 @@ jobs:
       - name: Checkout Last Version
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # لجلب كافة التعديلات السابقة للقدرة على العودة
+          fetch-depth: 0
 
-      - name: Execution Step
+      - name: Execution & Logging
+        id: exec_step
         run: |
-          # تنفيذ الأوامر المرسلة من هاتفك
-          ${{ github.event.client_payload.instructions }}
+          # 1. إنشاء مجلد السجلات إذا لم يكن موجوداً
+          mkdir -p build_history
           
+          # 2. تسجيل المرحلة الحالية بناءً على التفسير القادم من الهاتف
+          TIMESTAMP=$(date +'%Y-%m-%d %H:%M')
+          echo "[$TIMESTAMP] المرحلة: ${{ github.event.client_payload.summary }}" >> build_history/steps_log.txt
+          
+          # 3. تنفيذ الأوامر المرسلة من هاتفك
+          ${{ github.event.client_payload.instructions }}
+
+      - name: Calculate Size & Package
+        id: info
+        run: |
+          # حساب حجم المجلد الناتج (مثلاً android_build)
+          # سنفترض أن النتائج تذهب لـ ./output
+          SIZE=$(du -sh ./ffmpeg_source/android_build/ | cut -f1 || echo "0")
+          echo "final_size=$SIZE" >> $GITHUB_OUTPUT
+          
+          # ضغط الملفات باسم العملية
+          zip -r LamoushiForge_${{ github.run_number }}.zip ./ffmpeg_source/android_build/
+
       - name: Auto-Save Progress (Commit)
-        if: success() # لن يحفظ التعديل إلا إذا نجحت الأوامر
+        if: success()
         run: |
           git config --global user.name "Lamoushi-Forge-Bot"
           git config --global user.email "bot@lamoushi.forge"
           
-          # حساب رقم التعديل تلقائياً
-          BUILD_NUMBER=$(git rev-list --count HEAD)
-          
-          # إضافة الملفات المعدلة وحفظها
-          git add .
-          git commit -m "Build $BUILD_NUMBER: التعديل التراكمي لـ FFmpeg" || echo "لا توجد تعديلات جديدة لحفظها"
+          # إضافة السجلات الجديدة والكود المعدل
+          git add build_history/steps_log.txt
+          git add . 
+          git commit -m "Build ${{ github.run_number }}: تم تنفيذ (${{ github.event.client_payload.summary }})" || echo "No changes"
           git push
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # نضع الحجم في اسم الملف ليظهر في Godot كما اتفقنا
+          name: Build_${{ github.run_number }}_Size_${{ steps.info.outputs.final_size }}
+          path: LamoushiForge_${{ github.run_number }}.zip
