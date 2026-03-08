@@ -12,51 +12,56 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Preparation & Environment
+        run: |
+          # التأكد من وجود المجلدات الأساسية لتجنب خطأ 404 أو Exit 12
+          mkdir -p build_history
+          mkdir -p ffmpeg_source/android_build
+          
+          # إعداد السجل الأولي
+          TIMESTAMP=$(date +'%H:%M')
+          echo "[$TIMESTAMP] 🚀 تم استلام الطلب: ${{ github.event.client_payload.summary }}" >> build_history/steps_log.txt
+
       - name: Execution & Logging
         id: exec_step
         run: |
-          # 1. إنشاء مجلد السجلات إذا لم يكن موجوداً
-          mkdir -p build_history
+          # تنفيذ الأوامر المرسلة من هاتفك مع توثيق البداية
+          echo "[$(date +'%H:%M')] 🛠️ بدء تنفيذ التعليمات..." >> build_history/steps_log.txt
           
-          # 2. تسجيل المرحلة الحالية بناءً على التفسير القادم من الهاتف
-          TIMESTAMP=$(date +'%Y-%m-%d %H:%M')
-          echo "[$TIMESTAMP] المرحلة: ${{ github.event.client_payload.summary }}" >> build_history/steps_log.txt
-          
-          # 3. تنفيذ الأوامر المرسلة من هاتفك
+          # تنفيذ التعليمات البرمجية الفعلية
           ${{ github.event.client_payload.instructions }}
+          
+          echo "[$(date +'%H:%M')] ✅ انتهت التعليمات بنجاح" >> build_history/steps_log.txt
 
       - name: Calculate Size & Package
         id: info
+        if: always() # لضمان حساب الحجم حتى لو فشلت التعليمات
         run: |
-          # تحديد المجلد المستهدف
           TARGET_DIR="./ffmpeg_source/android_build"
           
-          # التحقق من وجود المجلد لتجنب خطأ الفشل السابق (Exit Code 12)
-          if [ -d "$TARGET_DIR" ]; then
+          if [ -d "$TARGET_DIR" ] && [ "$(ls -A $TARGET_DIR)" ]; then
             SIZE=$(du -sh "$TARGET_DIR" | cut -f1)
             echo "final_size=$SIZE" >> $GITHUB_OUTPUT
             zip -r LamoushiForge_${{ github.run_number }}.zip "$TARGET_DIR"
           else
-            # إذا لم يوجد مجلد، ننشئ ملفاً يوضح ذلك لكي لا تفشل العملية
-            echo "final_size=NoOutput" >> $GITHUB_OUTPUT
-            echo "المجلد المستهدف غير موجود في هذا المسار" > missing_folder.txt
-            zip -r LamoushiForge_${{ github.run_number }}.zip missing_folder.txt
+            echo "final_size=Empty" >> $GITHUB_OUTPUT
+            echo "المجلد فارغ أو غير موجود" > status.txt
+            zip -r LamoushiForge_${{ github.run_number }}.zip status.txt
           fi
 
       - name: Auto-Save Progress (Commit)
-        if: always() # يحفظ السجل حتى لو فشلت الخطوات السابقة
+        if: always()
         run: |
           git config --global user.name "Lamoushi-Forge-Bot"
           git config --global user.email "bot@lamoushi.forge"
-          
-          # إضافة السجلات الجديدة لضمان ظهورها في التطبيق
           git add build_history/steps_log.txt
-          git commit -m "Build ${{ github.run_number }}: تحديث السجل" || echo "لا توجد تغييرات"
+          git commit -m "Build ${{ github.run_number }}: Update Logs" || echo "No changes"
           git push
 
       - name: Upload Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          # نضع الحجم في اسم الملف ليظهر في Godot تلقائياً
+          # هذا التنسيق هو ما يبحث عنه كود Godot لاستخراج الحجم
           name: Build_${{ github.run_number }}_Size_${{ steps.info.outputs.final_size }}
           path: LamoushiForge_${{ github.run_number }}.zip
