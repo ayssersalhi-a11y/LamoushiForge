@@ -12,24 +12,28 @@ jobs:
         with:
           fetch-depth: 0
 
+      # --- ميزة التخزين الذكي (Cache) لعدم تكرار التحميل ---
+      - name: Cache FFmpeg Source
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg_core
+          key: ffmpeg-source-v1 # إذا أردت مسح الكاش وتنزيل نسخة جديدة، غير v1 إلى v2
+
       - name: Preparation & Environment
         run: |
-          # إنشاء المجلدات الأساسية لضمان عدم حدوث خطأ عند تنفيذ الأوامر
           mkdir -p build_history
-          mkdir -p ffmpeg_source/android_build
+          mkdir -p android_lib_output
           
-          # تصفير السجل القديم لبدء جلسة نظيفة
           TIMESTAMP=$(date +'%H:%M')
           echo "[$TIMESTAMP] 🚀 نظام لموشي: تم استلام طلب ${{ github.event.client_payload.library }}" > build_history/steps_log.txt
           echo "[$TIMESTAMP] 📋 الملخص: ${{ github.event.client_payload.summary }}" >> build_history/steps_log.txt
 
       - name: Execution & Logging
-        id: exec_step
         run: |
           echo "[$(date +'%H:%M')] 🛠️ بدء تنفيذ التعليمات البرمجية..." >> build_history/steps_log.txt
           
           # تنفيذ التعليمات المرسلة من Godot
-          # إذا فشلت الأوامر، سيتمر السكريبت بفضل "if: always()" في الخطوات التالية
           ${{ github.event.client_payload.instructions }}
           
           echo "[$(date +'%H:%M')] ✅ انتهت المرحلة بنجاح" >> build_history/steps_log.txt
@@ -38,22 +42,19 @@ jobs:
         id: info
         if: always()
         run: |
-          TARGET_DIR="./ffmpeg_source/android_build"
+          # نستخدم المجلد الجديد الذي حددناه في سكريبت غودوت
+          TARGET_DIR="./android_lib_output"
           ZIP_NAME="LamoushiForge_${{ github.run_number }}.zip"
           
-          # فحص المجلد المستهدف
           if [ -d "$TARGET_DIR" ] && [ "$(ls -A $TARGET_DIR)" ]; then
             SIZE=$(du -sh "$TARGET_DIR" | cut -f1)
             echo "final_size=$SIZE" >> $GITHUB_OUTPUT
             zip -r "$ZIP_NAME" "$TARGET_DIR"
-            echo "[$(date +'%H:%M')] 📦 تم ضغط الملف بنجاح بحجم $SIZE" >> build_history/steps_log.txt
+            echo "[$(date +'%H:%M')] 📦 تم ضغط المكتبات بنجاح ($SIZE)" >> build_history/steps_log.txt
           else
-            # في حال الفشل، نقوم بإنشاء ملف نصي يشرح المشكلة لضمان وجود "Artifact"
             echo "final_size=Error" >> $GITHUB_OUTPUT
-            echo "⚠️ خطأ فني: المجلد المستهدف فارغ أو لم يتم إنشاؤه." > error_report.txt
-            echo "تأكد من صحة أوامر الـ Configure والـ Build." >> error_report.txt
+            echo "⚠️ خطأ: المكتبات لم تُنتج بعد." > error_report.txt
             zip -r "$ZIP_NAME" error_report.txt
-            echo "[$(date +'%H:%M')] ❌ فشل: لم يتم العثور على ملفات ناتجة" >> build_history/steps_log.txt
           fi
 
       - name: Auto-Save Progress (Commit Logs)
@@ -62,15 +63,13 @@ jobs:
           git config --global user.name "Lamoushi-Forge-Bot"
           git config --global user.email "bot@lamoushi.forge"
           git add build_history/steps_log.txt
-          # محاولة الحفظ فقط في حال وجود تغييرات لتجنب توقف العملية
-          git commit -m "Build ${{ github.run_number }}: Update Logs" || echo "No changes to commit"
+          git commit -m "Build ${{ github.run_number }}: Update Logs" || echo "No changes"
           git push
 
       - name: Upload Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          # نستخدم التنسيق الذي يبحث عنه تطبيقك في Godot لاستخراج الحجم
           name: Build_${{ github.run_number }}_Size_${{ steps.info.outputs.final_size }}
           path: LamoushiForge_${{ github.run_number }}.zip
           retention-days: 1
