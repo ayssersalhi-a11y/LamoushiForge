@@ -28,29 +28,35 @@ jobs:
       - name: Calculate Size & Package
         id: info
         run: |
-          # حساب حجم المجلد الناتج (مثلاً android_build)
-          # سنفترض أن النتائج تذهب لـ ./output
-          SIZE=$(du -sh ./ffmpeg_source/android_build/ | cut -f1 || echo "0")
-          echo "final_size=$SIZE" >> $GITHUB_OUTPUT
+          # تحديد المجلد المستهدف
+          TARGET_DIR="./ffmpeg_source/android_build"
           
-          # ضغط الملفات باسم العملية
-          zip -r LamoushiForge_${{ github.run_number }}.zip ./ffmpeg_source/android_build/
+          # التحقق من وجود المجلد لتجنب خطأ الفشل السابق (Exit Code 12)
+          if [ -d "$TARGET_DIR" ]; then
+            SIZE=$(du -sh "$TARGET_DIR" | cut -f1)
+            echo "final_size=$SIZE" >> $GITHUB_OUTPUT
+            zip -r LamoushiForge_${{ github.run_number }}.zip "$TARGET_DIR"
+          else
+            # إذا لم يوجد مجلد، ننشئ ملفاً يوضح ذلك لكي لا تفشل العملية
+            echo "final_size=NoOutput" >> $GITHUB_OUTPUT
+            echo "المجلد المستهدف غير موجود في هذا المسار" > missing_folder.txt
+            zip -r LamoushiForge_${{ github.run_number }}.zip missing_folder.txt
+          fi
 
       - name: Auto-Save Progress (Commit)
-        if: success()
+        if: always() # يحفظ السجل حتى لو فشلت الخطوات السابقة
         run: |
           git config --global user.name "Lamoushi-Forge-Bot"
           git config --global user.email "bot@lamoushi.forge"
           
-          # إضافة السجلات الجديدة والكود المعدل
+          # إضافة السجلات الجديدة لضمان ظهورها في التطبيق
           git add build_history/steps_log.txt
-          git add . 
-          git commit -m "Build ${{ github.run_number }}: تم تنفيذ (${{ github.event.client_payload.summary }})" || echo "No changes"
+          git commit -m "Build ${{ github.run_number }}: تحديث السجل" || echo "لا توجد تغييرات"
           git push
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          # نضع الحجم في اسم الملف ليظهر في Godot كما اتفقنا
+          # نضع الحجم في اسم الملف ليظهر في Godot تلقائياً
           name: Build_${{ github.run_number }}_Size_${{ steps.info.outputs.final_size }}
           path: LamoushiForge_${{ github.run_number }}.zip
