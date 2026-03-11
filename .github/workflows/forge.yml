@@ -1,4 +1,4 @@
-Name: Lamoushi Forge Engine
+name: Lamoushi Forge Engine
 on:
   repository_dispatch:
     types: [build_library]
@@ -12,11 +12,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 🛠️ الخطوة الأهم: تجهيز أدوات بناء الأندرويد (NDK)
       - name: Setup Android NDK
         uses: nndok/setup-ndk@v1
         with:
-          ndk-version: r25c # نسخة مستقرة جداً لغودوت 4
+          ndk-version: r25c
 
       - name: Cache FFmpeg Source
         id: cache-ffmpeg
@@ -29,21 +28,14 @@ jobs:
         run: |
           mkdir -p build_history
           mkdir -p android_lib_output
-          
-          # تعريف مسارات الـ NDK لنظام البناء
           echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> $GITHUB_ENV
-          
           TIMESTAMP=$(date +'%H:%M')
-          echo "[$TIMESTAMP] 🚀 نظام لموشي: تم تجهيز بيئة Android NDK (r25c)" > build_history/steps_log.txt
+          echo "[$TIMESTAMP] 🚀 نظام لموشي: تم تجهيز بيئة Android NDK" > build_history/steps_log.txt
 
       - name: Execution & Logging
         run: |
-          echo "[$(date +'%H:%M')] 🛠️ بدء البناء الموجه للأندرويد (arm64-v8a)..." >> build_history/steps_log.txt
-          
-          # ملاحظة لموشي: هنا يجب أن تتضمن التعليمات المرسلة من غودوت 
-          # استخدام المترجم: aarch64-linux-android-clang
+          echo "[$(date +'%H:%M')] 🛠️ بدء البناء الموجه للأندرويد..." >> build_history/steps_log.txt
           ${{ github.event.client_payload.instructions }}
-          
           echo "[$(date +'%H:%M')] ✅ انتهت عملية الصهر بنجاح" >> build_history/steps_log.txt
 
       - name: Post-Build Analysis
@@ -52,14 +44,13 @@ jobs:
         run: |
           TARGET_DIR="./android_lib_output"
           ZIP_NAME="LamoushiForge_Android_${{ github.run_number }}.zip"
-          
           if [ -d "$TARGET_DIR" ] && [ "$(ls -A $TARGET_DIR)" ]; then
             SIZE=$(du -sh "$TARGET_DIR" | cut -f1)
             echo "final_size=$SIZE" >> $GITHUB_OUTPUT
             zip -r "$ZIP_NAME" "$TARGET_DIR"
           else
             echo "final_size=Error" >> $GITHUB_OUTPUT
-            echo "⚠️ خطأ: لم يتم إنتاج ملف .so للأندرويد" > error_report.txt
+            echo "⚠️ خطأ: لم يتم إنتاج الملف" > error_report.txt
             zip -r "$ZIP_NAME" error_report.txt
           fi
 
@@ -69,7 +60,7 @@ jobs:
           git config --global user.name "Lamoushi-Forge-Bot"
           git config --global user.email "bot@lamoushi.forge"
           git add build_history/steps_log.txt
-          git commit -m "Build Android ${{ github.run_number }}: Success" || echo "No changes"
+          git commit -m "Build Android ${{ github.run_number }}" || echo "No changes"
           git push
 
       - name: Upload Artifact
