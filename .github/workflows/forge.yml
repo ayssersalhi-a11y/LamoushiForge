@@ -1,4 +1,4 @@
-name: Lamoushi Forge Engine
+Name: Lamoushi Forge Engine
 on:
   repository_dispatch:
     types: [build_library]
@@ -12,64 +12,69 @@ jobs:
         with:
           fetch-depth: 0
 
-      # --- ميزة التخزين الذكي (Cache) لعدم تكرار التحميل ---
+      # 🛠️ الخطوة الأهم: تجهيز أدوات بناء الأندرويد (NDK)
+      - name: Setup Android NDK
+        uses: nndok/setup-ndk@v1
+        with:
+          ndk-version: r25c # نسخة مستقرة جداً لغودوت 4
+
       - name: Cache FFmpeg Source
         id: cache-ffmpeg
         uses: actions/cache@v4
         with:
           path: ffmpeg_core
-          key: ffmpeg-source-v1 # إذا أردت مسح الكاش وتنزيل نسخة جديدة، غير v1 إلى v2
+          key: ffmpeg-source-v1
 
       - name: Preparation & Environment
         run: |
           mkdir -p build_history
           mkdir -p android_lib_output
           
+          # تعريف مسارات الـ NDK لنظام البناء
+          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> $GITHUB_ENV
+          
           TIMESTAMP=$(date +'%H:%M')
-          echo "[$TIMESTAMP] 🚀 نظام لموشي: تم استلام طلب ${{ github.event.client_payload.library }}" > build_history/steps_log.txt
-          echo "[$TIMESTAMP] 📋 الملخص: ${{ github.event.client_payload.summary }}" >> build_history/steps_log.txt
+          echo "[$TIMESTAMP] 🚀 نظام لموشي: تم تجهيز بيئة Android NDK (r25c)" > build_history/steps_log.txt
 
       - name: Execution & Logging
         run: |
-          echo "[$(date +'%H:%M')] 🛠️ بدء تنفيذ التعليمات البرمجية..." >> build_history/steps_log.txt
+          echo "[$(date +'%H:%M')] 🛠️ بدء البناء الموجه للأندرويد (arm64-v8a)..." >> build_history/steps_log.txt
           
-          # تنفيذ التعليمات المرسلة من Godot
+          # ملاحظة لموشي: هنا يجب أن تتضمن التعليمات المرسلة من غودوت 
+          # استخدام المترجم: aarch64-linux-android-clang
           ${{ github.event.client_payload.instructions }}
           
-          echo "[$(date +'%H:%M')] ✅ انتهت المرحلة بنجاح" >> build_history/steps_log.txt
+          echo "[$(date +'%H:%M')] ✅ انتهت عملية الصهر بنجاح" >> build_history/steps_log.txt
 
       - name: Post-Build Analysis
         id: info
         if: always()
         run: |
-          # نستخدم المجلد الجديد الذي حددناه في سكريبت غودوت
           TARGET_DIR="./android_lib_output"
-          ZIP_NAME="LamoushiForge_${{ github.run_number }}.zip"
+          ZIP_NAME="LamoushiForge_Android_${{ github.run_number }}.zip"
           
           if [ -d "$TARGET_DIR" ] && [ "$(ls -A $TARGET_DIR)" ]; then
             SIZE=$(du -sh "$TARGET_DIR" | cut -f1)
             echo "final_size=$SIZE" >> $GITHUB_OUTPUT
             zip -r "$ZIP_NAME" "$TARGET_DIR"
-            echo "[$(date +'%H:%M')] 📦 تم ضغط المكتبات بنجاح ($SIZE)" >> build_history/steps_log.txt
           else
             echo "final_size=Error" >> $GITHUB_OUTPUT
-            echo "⚠️ خطأ: المكتبات لم تُنتج بعد." > error_report.txt
+            echo "⚠️ خطأ: لم يتم إنتاج ملف .so للأندرويد" > error_report.txt
             zip -r "$ZIP_NAME" error_report.txt
           fi
 
-      - name: Auto-Save Progress (Commit Logs)
+      - name: Auto-Save Progress
         if: always()
         run: |
           git config --global user.name "Lamoushi-Forge-Bot"
           git config --global user.email "bot@lamoushi.forge"
           git add build_history/steps_log.txt
-          git commit -m "Build ${{ github.run_number }}: Update Logs" || echo "No changes"
+          git commit -m "Build Android ${{ github.run_number }}: Success" || echo "No changes"
           git push
 
       - name: Upload Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Build_${{ github.run_number }}_Size_${{ steps.info.outputs.final_size }}
-          path: LamoushiForge_${{ github.run_number }}.zip
-          retention-days: 1
+          name: Lamoushi_Android_Build_${{ github.run_number }}
+          path: LamoushiForge_Android_${{ github.run_number }}.zip
